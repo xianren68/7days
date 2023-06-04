@@ -1,6 +1,8 @@
 package Gee
 
-import "strings"
+import (
+	"strings"
+)
 
 // 路由前缀树
 type node struct {
@@ -35,6 +37,7 @@ func (n *node) matchChildern(part string) []*node {
 func (n *node) insert(pattern string, parts []string, height int) {
 	// 路径完全匹配
 	if len(parts) == height {
+		n.pattern = pattern
 		return
 	}
 	part := parts[height]       // 每次匹配的节点

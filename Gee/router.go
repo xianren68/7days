@@ -67,7 +67,7 @@ func (router *router) getRouter(method, path string) (*node, map[string]string) 
 			if part[0] == ':' {
 				params[part[1:]] = searchParts[index] // 获取param参数
 			}
-			if part[0] == '*' && len(part) < 1 {
+			if part[0] == '*' && len(part) > 1 {
 				params[part[1:]] = strings.Join(searchParts[index:], "/")
 				break
 			}
@@ -81,11 +81,13 @@ func (router *router) getRouter(method, path string) (*node, map[string]string) 
 // 匹配路由处理函数
 func (router *router) Handle(c *Context) {
 	node, params := router.getRouter(c.Method, c.Path)
-	c.Params = params
-	key := c.Method + "-" + node.pattern
-	if handle, ok := router.handlers[key]; ok {
-		handle(c)
+	// 输出日志
+	log.Printf("request:%s-%s", c.Method, c.Path)
+	if node != nil {
+		c.Params = params
+		key := c.Method + "-" + node.pattern
+		router.handlers[key](c)
 	} else {
-		c.String(http.StatusNotFound, "404 Not Found:%s\n", c.Path)
+		c.String(http.StatusNotFound, "404 Not Found:%s", c.Path)
 	}
 }
