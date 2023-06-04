@@ -21,10 +21,12 @@ type Context struct {
 	Path string
 	// 返回状态码
 	StatusCode int
+	// params参数
+	Params map[string]string
 }
 
 // 创建context实例
-func NewContext(w http.ResponseWriter, req *http.Request) *Context {
+func newContext(w http.ResponseWriter, req *http.Request) *Context {
 	return &Context{
 		Writer: w,
 		Req:    req,
@@ -47,6 +49,12 @@ func (c *Context) PostForm(key string) string {
 func (c *Context) Status(code int) {
 	c.StatusCode = code
 	c.Writer.WriteHeader(code)
+}
+
+// 获取params参数
+func (c *Context) Param(key string) string {
+	value := c.Params[key]
+	return value
 }
 
 // 设置请求头
