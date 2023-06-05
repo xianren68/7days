@@ -8,20 +8,23 @@ import (
 func main() {
 	// 创建Engine实例
 	e := Gee.New()
-	e.Get("/", func(ctx *Gee.Context) {
-		ctx.String(200, "%s", ctx.Query("name"))
-	})
-	e.Post("/hello", func(ctx *Gee.Context) {
-		ctx.String(200, "%s", ctx.PostForm("name"))
-	})
-	e.Get("/xianren/:name", func(ctx *Gee.Context) {
-		ctx.String(200, "%s,%s", ctx.Param("name"), ctx.Path)
-	})
-	e.Get("/assets/*filepath", func(ctx *Gee.Context) {
-		ctx.Json(http.StatusOK, Gee.H{
-			"filepath": ctx.Param("filepath"),
+	v1 := e.Group("/hello")
+	{
+		v1.Get("/name", func(ctx *Gee.Context) {
+			ctx.String(http.StatusOK, "%s", ctx.Query("name"))
 		})
-	})
+		v1.Post("/name", func(ctx *Gee.Context) {
+			ctx.Json(http.StatusOK, Gee.H{
+				"name": ctx.PostForm("name"),
+			})
+		})
+	}
+	v2 := e.Group("/Hi")
+	{
+		v2.Get("/age/:age", func(ctx *Gee.Context) {
+			ctx.String(http.StatusOK, "%s", ctx.Param("age"))
+		})
+	}
 	e.Run(":9999")
 
 }
