@@ -2,6 +2,7 @@ package Gee
 
 import (
 	"net/http"
+	"strings"
 )
 
 // 定义结构体,结构体包含router map,用于查找路由
@@ -30,7 +31,14 @@ func (engine *Engine) Run(addr string) (err error) {
 
 // 定义结构体方法，满足http.Handler接口
 func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	middlewares := make([]HandlerFunc, 0)
+	for _, val := range engine.groups {
+		if strings.HasPrefix(req.URL.Path, val.prefix) { // 将对应分组的中间件加入
+			middlewares = append(middlewares, val.middlewares...)
+		}
+	}
 	c := newContext(w, req)
+	c.handlers = middlewares
 	// 分发路由
 	engine.router.Handle(c)
 }

@@ -35,3 +35,9 @@ func (group *RouterGroup) Get(path string, handler HandlerFunc) {
 func (group *RouterGroup) Post(path string, handler HandlerFunc) {
 	group.addRoute("POST", path, handler)
 }
+
+// 设置use方法，用于使用中间件
+func (group *RouterGroup) Use(middlewares ...HandlerFunc) { // 可以传递多个中间件
+	// 添加中间件到middlewares
+	group.middlewares = append(group.middlewares, middlewares...)
+}

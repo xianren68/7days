@@ -86,8 +86,11 @@ func (router *router) Handle(c *Context) {
 	if node != nil {
 		c.Params = params
 		key := c.Method + "-" + node.pattern
-		router.handlers[key](c)
+		c.handlers = append(c.handlers, router.handlers[key]) // 将处理函数放到中间件数组中
 	} else {
-		c.String(http.StatusNotFound, "404 Not Found:%s", c.Path)
+		c.handlers = append(c.handlers, func(ctx *Context) {
+			c.String(http.StatusNotFound, "404 Not Found:%s", c.Path)
+		})
 	}
+	c.Next() // 执行方法
 }

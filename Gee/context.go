@@ -23,6 +23,10 @@ type Context struct {
 	StatusCode int
 	// params参数
 	Params map[string]string
+	// 中间件列表
+	handlers []HandlerFunc
+	// 当前在执行哪个中间件
+	index int
 }
 
 // 创建context实例
@@ -32,6 +36,7 @@ func newContext(w http.ResponseWriter, req *http.Request) *Context {
 		Req:    req,
 		Method: req.Method,
 		Path:   req.URL.Path,
+		index:  -1,
 	}
 }
 
@@ -93,4 +98,20 @@ func (c *Context) Html(code int, html string) {
 	c.SetHeader("Context-Type", "text/html")
 	c.Status(code)
 	c.Writer.Write([]byte(html))
+}
+
+// 设置next方法
+func (c *Context) Next() {
+	c.index++
+	for ; c.index < len(c.handlers); c.index++ { //c.index会改变不用担心函数重复执行
+		c.handlers[c.index](c)
+	}
+}
+
+// 设置Fail方法,中止中间件的执行
+func (c *Context) Fail(code int, err string) {
+	c.index = len(c.handlers) // 跳到最后，没有函数可执行
+	c.Json(code, H{
+		"err": err,
+	})
 }
