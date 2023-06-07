@@ -2,37 +2,48 @@ package main
 
 import (
 	"Gee"
-	"log"
+	"fmt"
 	"net/http"
+	"text/template"
+	"time"
 )
 
-func main() {
-	// 创建Engine实例
-	e := Gee.New()
-	e.Use(func(c *Gee.Context) {
-		log.Printf("%s", "global")
-	})
-	v1 := e.Group("/hello")
-	{
-		v1.Get("/name", func(ctx *Gee.Context) {
-			ctx.String(http.StatusOK, "%s", ctx.Query("name"))
-		})
-		v1.Post("/name", func(ctx *Gee.Context) {
-			ctx.Json(http.StatusOK, Gee.H{
-				"name": ctx.PostForm("name"),
-			})
-		})
-	}
-	v2 := e.Group("/Hi")
-	v2.Use(func(ctx *Gee.Context) {
-		log.Printf("%s", "v2")
-		ctx.Fail(404, "出错了")
-	})
-	{
-		v2.Get("/age/:age", func(ctx *Gee.Context) {
-			ctx.String(http.StatusOK, "%s", ctx.Param("age"))
-		})
-	}
-	e.Run(":9999")
+type student struct {
+	Name string
+	Age  int8
+}
 
+func FormatAsDate(t time.Time) string {
+	year, month, day := t.Date()
+	return fmt.Sprintf("%d-%02d-%02d", year, month, day)
+}
+
+func main() {
+	r := Gee.New()
+	r.SetFuncMap(template.FuncMap{
+		"FormatAsDate": FormatAsDate,
+	})
+	r.LoadHTMLGlob("templates/*")
+	r.Static("/assets", "./static")
+
+	stu1 := &student{Name: "Geektutu", Age: 20}
+	stu2 := &student{Name: "Jack", Age: 22}
+	r.Get("/", func(c *Gee.Context) {
+		c.Html(http.StatusOK, "test.tmpl", nil)
+	})
+	r.Get("/students", func(c *Gee.Context) {
+		c.Html(http.StatusOK, "test.tmpl", Gee.H{
+			"title":  "gee",
+			"stuArr": [2]*student{stu1, stu2},
+		})
+	})
+
+	r.Get("/date", func(c *Gee.Context) {
+		c.Html(http.StatusOK, "test.tmpl", Gee.H{
+			"title": "gee",
+			"now":   time.Date(2019, 8, 17, 0, 0, 0, 0, time.UTC),
+		})
+	})
+
+	r.Run(":9999")
 }

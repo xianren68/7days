@@ -26,7 +26,8 @@ type Context struct {
 	// 中间件列表
 	handlers []HandlerFunc
 	// 当前在执行哪个中间件
-	index int
+	index  int
+	engine *Engine
 }
 
 // 创建context实例
@@ -94,10 +95,12 @@ func (c *Context) Data(code int, data []byte) {
 }
 
 // 返回html数据
-func (c *Context) Html(code int, html string) {
+func (c *Context) Html(code int, name string, data interface{}) {
 	c.SetHeader("Context-Type", "text/html")
 	c.Status(code)
-	c.Writer.Write([]byte(html))
+	if err := c.engine.htmlTemplates.ExecuteTemplate(c.Writer, name, data); err != nil {
+		c.Fail(500, err.Error())
+	}
 }
 
 // 设置next方法
