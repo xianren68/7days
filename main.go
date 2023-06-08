@@ -14,7 +14,7 @@ func FormatAsDate(t time.Time) string {
 }
 
 func main() {
-	r := Gee.New()
+	r := Gee.Defalut()
 	r.SetFuncMap(template.FuncMap{
 		"FormatAsDate": FormatAsDate,
 	})

@@ -31,5 +31,6 @@ func Recovery() HandlerFunc {
 				ctx.Fail(http.StatusInternalServerError, "Internal Server Error")
 			}
 		}()
+		ctx.Next()
 	}
 }
