@@ -27,6 +27,13 @@ func New() *Engine {
 	return engine
 }
 
+// 默认错误捕获
+func Defalut() *Engine {
+	engine := New()
+	engine.Use(Recovery())
+	return engine
+}
+
 // 监听端口
 func (engine *Engine) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, engine)
