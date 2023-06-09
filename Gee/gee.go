@@ -10,9 +10,9 @@ import (
 type Engine struct {
 	*RouterGroup
 	router        *router
-	groups        []*RouterGroup
-	htmlTemplates *template.Template
-	funcMap       template.FuncMap
+	groups        []*RouterGroup     // 所有的路由分组
+	htmlTemplates *template.Template // 所有的模板
+	funcMap       template.FuncMap   // 模板处理方法
 }
 
 // 定义方法，用于处理处理请求，它接收参数为Context实例
