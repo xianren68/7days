@@ -9,8 +9,8 @@ import (
 
 var (
 	// 错误与信息日志，会输出文件代码行数以及时间戳
-	errorlog = log.New(os.Stdout, "Error", log.LstdFlags|log.Lshortfile)
-	infolog  = log.New(os.Stdout, "Info", log.LstdFlags|log.Lshortfile)
+	errorlog = log.New(os.Stdout, "\033[31m[error]\033[0m ", log.LstdFlags|log.Lshortfile)
+	infolog  = log.New(os.Stdout, "\033[34m[info ]\033[0m", log.LstdFlags|log.Lshortfile)
 	// 日志实例列表
 	loggers = []*log.Logger{errorlog, infolog}
 	// 锁
