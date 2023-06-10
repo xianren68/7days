@@ -1,13 +1,15 @@
 package Orm
 
 import (
+	"Orm/dialect"
 	"Orm/log"
 	"Orm/session"
 	"database/sql"
 )
 
 type Engine struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect dialect.Dialect
 }
 
 func NewEngine(dirver, source string) (e *Engine, err error) {
@@ -21,7 +23,12 @@ func NewEngine(dirver, source string) (e *Engine, err error) {
 		log.Error(err)
 		return
 	}
-	e = &Engine{db: db}
+	//
+	dial, ok := dialect.GetDialect(dirver)
+	if !ok {
+		log.Errorf("dialect %s not Found", dirver)
+	}
+	e = &Engine{db: db, dialect: dial}
 	log.Info("Collection database success")
 	return
 }
@@ -36,5 +43,5 @@ func (e *Engine) Close() {
 
 // 创建一个新的会话
 func (e *Engine) NewSession() *session.Session {
-	return session.New(e.db)
+	return session.New(e.db, e.dialect)
 }
