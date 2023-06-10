@@ -2,9 +2,14 @@ package example
 
 import (
 	"Orm"
-	"fmt"
+
 	_ "github.com/mattn/go-sqlite3"
 )
+
+type Student struct {
+	Name string `Orm:"primary key"`
+	age  int    `Orm:"not null"`
+}
 
 func OrmExample() {
 	// 创建一个连接
@@ -15,11 +20,8 @@ func OrmExample() {
 	}
 	// 创建一个会话
 	s := collect.NewSession()
-	// 执行语句
-	_, _ = s.Raw("DROP TABLE IF EXISTS User;").Exec()
-	_, _ = s.Raw("CREATE TABLE User(Name text);").Exec()
-	_, _ = s.Raw("CREATE TABLE User(Name text);").Exec()
-	result, _ := s.Raw("INSERT INTO User(`Name`) values (?), (?)", "Tom", "Sam").Exec()
-	count, _ := result.RowsAffected()
-	fmt.Printf("Exec success, %d affected\n", count)
+	s.Model(&Student{})
+	// 创建表
+	s.CreateTable()
+
 }

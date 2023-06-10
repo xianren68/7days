@@ -1,7 +1,9 @@
 package session
 
 import (
+	"Orm/dialect"
 	"Orm/log"
+	"Orm/schema"
 	"database/sql"
 	"strings"
 )
@@ -11,12 +13,16 @@ type Session struct {
 	// sql语句
 	sql     strings.Builder
 	sqlVars []interface{}
+	// 对应的数据库类型操作
+	dialect  dialect.Dialect
+	refTable *schema.Schema
 }
 
 // 创建会话实例
-func New(db *sql.DB) *Session {
+func New(db *sql.DB, dialect dialect.Dialect) *Session {
 	return &Session{
-		db: db,
+		db:      db,
+		dialect: dialect,
 	}
 }
 
