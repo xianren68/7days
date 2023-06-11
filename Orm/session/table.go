@@ -39,7 +39,7 @@ func (s *Session) CreateTable() error {
 }
 
 // 删除表
-func (s *Session) DropTale() error {
+func (s *Session) DropTable() error {
 	_, err := s.Raw(fmt.Sprintf("drop table if exists %s", s.RefTable().Name)).Exec()
 	return err
 
