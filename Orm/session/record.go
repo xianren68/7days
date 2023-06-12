@@ -2,6 +2,7 @@ package session
 
 import (
 	"Orm/clause"
+	"errors"
 	"reflect"
 )
 
@@ -52,4 +53,77 @@ func (s *Session) Find(values interface{}) error {
 	}
 	return rows.Close()
 
+}
+
+// 更新操作
+func (s *Session) Update(values ...interface{}) (int64, error) {
+	m, ok := values[0].(map[string]interface{})
+	if !ok { // 传入的不是map类型
+		m = make(map[string]interface{})
+		for i := 0; i < len(values); i += 2 {
+			m[values[i].(string)] = values[i+1]
+		}
+	}
+
+	s.clause.Set(clause.UPDATE, s.RefTable().Name, m)
+	sql, vars := s.clause.Build(clause.UPDATE, clause.WHERE)
+	result, err := s.Raw(sql, vars...).Exec()
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+// 删除操作
+func (s *Session) Delete() (int64, error) {
+	s.clause.Set(clause.DELETE, s.RefTable().Name)
+	sql, vars := s.clause.Build(clause.DELETE, clause.WHERE)
+	result, err := s.Raw(sql, vars...).Exec()
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+func (s *Session) Count() (int64, error) {
+	s.clause.Set(clause.COUNT, s.RefTable().Name)
+	sql, vars := s.clause.Build(clause.COUNT, clause.WHERE)
+	result := s.Raw(sql, vars...).QueryRow()
+	var tmp int64
+	if err := result.Scan(&tmp); err != nil {
+		return 0, err
+	}
+	return tmp, nil
+}
+
+// limit语句
+func (s *Session) Limit(num int) *Session {
+	s.clause.Set(clause.LIMIT, num)
+	return s // 返回实例本身，用于链式调用
+}
+func (s *Session) Where(desc string, args ...interface{}) *Session {
+	var vars []interface{}
+	vars = append(vars, desc)
+	vars = append(vars, args...)
+	s.clause.Set(clause.WHERE, vars...)
+	return s
+}
+
+func (s *Session) OrderBy(desc string) *Session {
+	s.clause.Set(clause.ORDERBY, desc)
+	return s
+}
+
+func (s *Session) First(value interface{}) error {
+	dest := reflect.Indirect(reflect.ValueOf(value))
+	destSlice := reflect.New(reflect.SliceOf(dest.Type())).Elem()
+	if err := s.Limit(1).Find(destSlice.Addr().Interface()); err != nil {
+		return err
+	}
+	if destSlice.Len() == 0 { //不存在
+		return errors.New("Not found")
+
+	}
+	dest.Set(destSlice.Index(0)) // 将返回结果赋给结构体
+	return nil
 }

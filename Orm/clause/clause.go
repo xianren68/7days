@@ -24,6 +24,9 @@ const (
 	LIMIT
 	WHERE
 	ORDERBY
+	UPDATE
+	DELETE
+	COUNT
 )
 
 func init() {
@@ -34,6 +37,9 @@ func init() {
 	generators[LIMIT] = _limit
 	generators[WHERE] = _where
 	generators[ORDERBY] = _orderBy
+	generators[UPDATE] = _update
+	generators[DELETE] = _delete
+	generators[COUNT] = _count
 }
 
 func genBindvars(num int) string {
@@ -93,9 +99,30 @@ func _where(values ...interface{}) (string, []interface{}) {
 }
 
 func _orderBy(values ...interface{}) (string, []interface{}) {
-	return fmt.Sprintf("orderby %s", values[0]), []interface{}{}
+	return fmt.Sprintf("order by %s", values[0]), []interface{}{}
 }
 
+// update语句
+func _update(values ...interface{}) (string, []interface{}) {
+	tablename := values[0]
+	m := values[1].(map[string]interface{})
+	keys := make([]string, 0)
+	vars := make([]interface{}, 0)
+	for i, v := range m {
+		keys = append(keys, i+" = ?")
+		vars = append(vars, v)
+	}
+	return fmt.Sprintf("update %s set %s", tablename, strings.Join(keys, ", ")), vars
+}
+func _delete(values ...interface{}) (string, []interface{}) {
+	return fmt.Sprintf("delete from %s", values[0]), []interface{}{}
+}
+
+func _count(values ...interface{}) (string, []interface{}) {
+	return _select(values[0], []string{"count(*)"})
+}
+
+// 拼接sql
 func (c *Clause) Set(name Type, vars ...interface{}) {
 	if c.sql == nil {
 		c.sql = make(map[Type]string)
@@ -106,7 +133,12 @@ func (c *Clause) Set(name Type, vars ...interface{}) {
 	c.sqlVars[name] = vars
 }
 
+// 按顺序拼接所有sql
 func (c *Clause) Build(orders ...Type) (string, []interface{}) {
+	defer func() { // 清楚存储的sql
+		c.sql = nil
+		c.sqlVars = nil
+	}()
 	var sqls []string
 	var vars []interface{}
 	for _, order := range orders {
