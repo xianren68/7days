@@ -11,6 +11,7 @@ func (s *Session) Insert(values ...interface{}) (int64, error) {
 	recordValues := make([]interface{}, 0)
 
 	for _, value := range values {
+		s.CallMethod("BeforeInsert", value)
 		// 获取表
 		table := s.Model(value).RefTable()
 		// 添加sql语句
@@ -31,6 +32,8 @@ func (s *Session) Insert(values ...interface{}) (int64, error) {
 func (s *Session) Find(values interface{}) error {
 	destSlice := reflect.Indirect(reflect.ValueOf(values))
 	destType := destSlice.Type().Elem()
+	// 查询前钩子
+	// s.CallMethod("BeforeQuery", nil)
 	table := s.Model(reflect.New(destType).Elem().Interface()).RefTable()
 	s.clause.Set(clause.SELECT, table.Name, table.FiledNames)
 	sql, vars := s.clause.Build(clause.SELECT, clause.WHERE, clause.ORDERBY, clause.LIMIT)
@@ -49,6 +52,8 @@ func (s *Session) Find(values interface{}) error {
 		if err := rows.Scan(values...); err != nil {
 			return err
 		}
+		// 查询后钩子
+		s.CallMethod("AfterQuery", dest.Addr().Interface())
 		destSlice.Set(reflect.Append(destSlice, dest))
 	}
 	return rows.Close()
