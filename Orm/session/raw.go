@@ -14,6 +14,7 @@ type Session struct {
 	// sql语句
 	sql     strings.Builder
 	sqlVars []interface{}
+	tx      *sql.Tx // 数据库事务
 	// 对应的数据库类型操作
 	dialect  dialect.Dialect
 	refTable *schema.Schema
@@ -35,8 +36,17 @@ func (s *Session) Clear() {
 	s.clause = clause.Clause{}
 }
 
+type CommonDB interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}
+
 // 获取数据库连接
-func (s *Session) DB() *sql.DB {
+func (s *Session) DB() CommonDB {
+	if s.tx != nil {
+		return s.tx
+	}
 	return s.db
 }
 

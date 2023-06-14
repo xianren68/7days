@@ -45,3 +45,30 @@ func (e *Engine) Close() {
 func (e *Engine) NewSession() *session.Session {
 	return session.New(e.db, e.dialect)
 }
+
+// 接口，用户只需要将操作通过回调函数传入，会自动执行事务
+type TxFunc func(*session.Session) (interface{}, error)
+
+func (e *Engine) Transaction(f TxFunc) (result interface{}, err error) {
+	// 创建新的会话
+	s := e.NewSession()
+	if err = s.Begin(); err != nil {
+		return
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			// 出错，回滚
+			_ = s.RollBack()
+			panic(p)
+		} else if err != nil {
+			// 执行出错，回滚
+			_ = s.RollBack()
+
+		} else {
+			// 没问题，提交
+			err = s.Commit()
+		}
+	}()
+	return f(s)
+
+}
