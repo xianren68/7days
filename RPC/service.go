@@ -2,13 +2,10 @@ package RPC
 
 import (
 	"RPC/codec"
-	"encoding/json"
-	"fmt"
-	"io"
+	"go/ast"
 	"log"
-	"net"
 	"reflect"
-	"sync"
+	"sync/atomic"
 )
 
 // MagicNumber 校验连接正确
@@ -26,128 +23,94 @@ var DefaultOption = &Option{
 	CodecType:   codec.GobType,
 }
 
-// Service 服务端
-type Service struct {
+// 服务方法
+type methodType struct {
+	method reflect.Method
+	// 参数类型
+	ArgType reflect.Type
+	// 第二个参数
+	ReplyType reflect.Type
+	numsCall  uint64
 }
 
-// NewService 客户端构造函数
-func NewService() *Service {
-	return &Service{}
+func (m *methodType) NumCalls() uint64 {
+	return atomic.LoadUint64(&m.numsCall)
 }
-
-// DefaultService 客户端默认实现
-var DefaultService = NewService()
-
-// Accept 接收客户端连接
-func (service *Service) Accept(lis net.Listener) {
-	for {
-		conn, err := lis.Accept()
-		if err != nil {
-			log.Println("rpc listen: accept error", err)
-		}
-		go service.ServiceConn(conn)
+func (m *methodType) newArgv() reflect.Value {
+	var argv reflect.Value
+	if m.ArgType.Kind() == reflect.Ptr {
+		argv = reflect.New(m.ArgType.Elem())
+	} else {
+		argv = reflect.New(m.ArgType).Elem()
 	}
+	return argv
+}
+func (m *methodType) newReply() reflect.Value {
+	var reply = reflect.New(m.ReplyType.Elem())
+	switch m.ReplyType.Elem().Kind() {
+	case reflect.Map:
+		reply.Elem().Set(reflect.MakeMap(m.ReplyType.Elem()))
+	case reflect.Slice:
+		reply.Elem().Set(reflect.MakeSlice(m.ReplyType.Elem(), 0, 0))
+	}
+	return reply
 }
 
-// Accept 直接监听客户端连接
-func Accept(lis net.Listener) {
-	DefaultService.Accept(lis)
+// service 服务
+type service struct {
+	name   string
+	typ    reflect.Type
+	rcvr   reflect.Value
+	method map[string]*methodType
 }
 
-// ServiceConn 处理rpc连接
-func (service *Service) ServiceConn(conn io.ReadWriteCloser) {
-	// 尝试解码option
-	var opt Option
-	if err := json.NewDecoder(conn).Decode(&opt); err != nil {
-		log.Println("option err", err)
-		return
+func newService(rcvr any) *service {
+	s := new(service)
+	s.rcvr = reflect.ValueOf(rcvr)
+	s.name = reflect.Indirect(s.rcvr).Type().Name()
+	s.typ = reflect.TypeOf(rcvr)
+	if !ast.IsExported(s.name) {
+		log.Fatalf("rpc server: %s is not a valid service name", s.name)
 	}
-	// 校验连接是否正确
-	if opt.MagicNumber != MagicNumber {
-		log.Println("rpc server:invalid magic number", opt.MagicNumber)
-		return
-	}
-	f := codec.NewCodecMap[opt.CodecType]
-	// 判断是否存在对应的编解码器
-	if f == nil {
-		log.Println("rpc server:invalid codec type", opt.CodecType)
-		return
-	}
-	service.serviceCodec(f(conn))
+	s.registerMethods()
+	return s
 
 }
-func (service *Service) serviceCodec(cc codec.Codec) {
-	// 保证数据发送时的安全，避免客户端接收的消息无序
-	sending := new(sync.Mutex)
-	wg := new(sync.WaitGroup)
-	for {
-		req, err := service.readRequest(cc)
-		if err != nil {
-			if req == nil {
-				break
-			}
-			req.h.Error = err.Error()
-			service.sendResponse(cc, sending, req.h, struct{}{})
+func (service *service) call(m *methodType, argv, reply reflect.Value) error {
+	atomic.AddUint64(&m.numsCall, 1)
+	f := m.method.Func
+	returnValues := f.Call([]reflect.Value{service.rcvr, argv, reply})
+	if errInter := returnValues[0].Interface(); errInter != nil {
+		return errInter.(error)
+	}
+	return nil
+}
+
+func (service *service) registerMethods() {
+	service.method = make(map[string]*methodType)
+	for i := 0; i < service.typ.NumMethod(); i++ {
+		method := service.typ.Method(i)
+		mType := method.Type
+		if mType.NumIn() != 3 || mType.NumOut() != 1 {
 			continue
 		}
-		wg.Add(1)
-		go service.handleRequest(cc, req, sending, wg)
-	}
-	wg.Wait()
-	_ = cc.Close()
-}
-
-// 请求结构体
-type request struct {
-	// 请求头
-	h *codec.Header
-	// 参数
-	argv reflect.Value
-	// 回复
-	replyv reflect.Value
-}
-
-// 获取请求头
-func (service *Service) readRequestHeader(cc codec.Codec) (*codec.Header, error) {
-	var h codec.Header
-	if err := cc.ReadHeader(&h); err != nil {
-		// 不是到了末尾
-		if err != io.EOF && err != io.ErrUnexpectedEOF {
-			log.Println("rpc server:read Header err", err)
+		if mType.Out(0) != reflect.TypeOf((*error)(nil)).Elem() {
+			continue
 		}
-		return nil, err
-	}
-	return &h, nil
-}
-
-// 获取请求信息
-func (service *Service) readRequest(cc codec.Codec) (*request, error) {
-	h, err := service.readRequestHeader(cc)
-	if err != nil {
-		return nil, err
-	}
-	req := &request{h: h}
-	// 暂时只支持string
-	req.argv = reflect.New(reflect.TypeOf(""))
-	if err = cc.ReadBody(req.argv.Interface()); err != nil {
-		log.Println("rpc service: read body error", err)
-	}
-	return req, err
-}
-
-// 发送回复信息
-func (service *Service) sendResponse(cc codec.Codec, sending *sync.Mutex, h *codec.Header, body any) {
-	// 上锁，保证并发安全
-	sending.Lock()
-	defer sending.Unlock()
-	if err := cc.Write(h, body); err != nil {
-		log.Println("rpc service:write response error", err)
+		argType, replyType := mType.In(1), mType.In(2)
+		if !isExportedOrBuiltinType(argType) || !isExportedOrBuiltinType(replyType) {
+			continue
+		}
+		service.method[method.Name] = &methodType{
+			method:    method,
+			ArgType:   argType,
+			ReplyType: replyType,
+		}
+		log.Printf("rpc server: register %s.%s\n", service.name, method.Name)
 	}
 }
 
-func (service *Service) handleRequest(cc codec.Codec, req *request, sending *sync.Mutex, wg *sync.WaitGroup) {
-	defer wg.Done()
-	log.Println(req.h, req.argv.Elem())
-	req.replyv = reflect.ValueOf(fmt.Sprintf("rpc resp %d", req.h.Seq))
-	service.sendResponse(cc, sending, req.h, req.replyv.Interface())
+// 是否可导出
+func isExportedOrBuiltinType(t reflect.Type) bool {
+	return ast.IsExported(t.Name()) || t.PkgPath() == ""
 }
