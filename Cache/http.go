@@ -26,6 +26,8 @@ func NewHttpPool(self string) *HttpPool {
 func (p *HttpPool) Log(format string, v ...any) {
 	log.Printf("[Server %s] %s\n", p.self, fmt.Sprintf(format, v...))
 }
+
+// ServeHTTP implement http.Handler.
 func (p *HttpPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, p.basePath) {
 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
