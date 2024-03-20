@@ -1,20 +1,49 @@
 package Cache
 
 import (
+	"Cache/consistenthash"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 )
 
-const DEFAULT_BASE_PATH = "/_cache/"
+const (
+	DEFAULT_BASE_PATH = "/_cache/"
+	// DEFAULT_REPLICAS default number of one real node to corrsponding how many virtual nodes.
+	DEFAULT_REPLICAS = 50
+)
+
+type HttpGetter struct {
+	baseUrl string
+}
+
+// Get get value from remotely nodes.
+func (h *HttpGetter) Get(group, key string) ([]byte, error) {
+	u := fmt.Sprintf("%s%s%s", h.baseUrl, url.QueryEscape(group), url.QueryEscape(key))
+	res, err := http.Get(u)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned: %v", res.Status)
+	}
+	return io.ReadAll(res.Body)
+}
 
 // HttpPool Http client pool.
 type HttpPool struct {
 	// host:port
 	self string
 	// request path
-	basePath string
+	basePath    string
+	mu          sync.Mutex
+	peers       *consistenthash.Map
+	httpGetters map[string]*HttpGetter
 }
 
 func NewHttpPool(self string) *HttpPool {
@@ -33,7 +62,7 @@ func (p *HttpPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
 	}
 	p.Log("%s %s", r.Method, r.URL.Path)
-	// /<basepath>/<groupname>/<key> required
+	// /<basepath>/<groupname>/<key> required.
 	parts := strings.SplitN(r.URL.Path[len(p.basePath):], "/", 2)
 	if len(parts) != 2 {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -55,4 +84,27 @@ func (p *HttpPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Write(view.Byteslice())
+}
+
+// Set set consistent hash map.
+func (p *HttpPool) Set(peers ...string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.peers = consistenthash.NewMap(DEFAULT_REPLICAS, nil)
+	p.peers.Add(peers...)
+	p.httpGetters = make(map[string]*HttpGetter, len(peers))
+	for _, peer := range peers {
+		p.httpGetters[peer] = &HttpGetter{baseUrl: peer + p.basePath}
+	}
+}
+
+func (p *HttpPool) PickPeer(key string) (PeerGetter, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	//
+	if peer := p.peers.Get(key); peer != "" && peer != p.self {
+		p.Log("Pick peer %s", peer)
+		return p.httpGetters[peer], true
+	}
+	return nil, false
 }

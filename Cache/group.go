@@ -25,6 +25,16 @@ type Group struct {
 	name      string
 	getter    Getter
 	mainCache *cache
+	peers     PeerPicker
+}
+
+// RegisterPeers register peerPicker.
+func (g *Group) RegisterPeers(peers PeerPicker) {
+	if g.peers != nil {
+		log.Println("peerPicker is already registered")
+		return
+	}
+	g.peers = peers
 }
 
 func NewGroup(name string, cacheBytes int, getter Getter) *Group {
@@ -61,7 +71,21 @@ func (g *Group) Get(key string) (ByteView, error) {
 }
 
 func (g *Group) load(key string) (ByteView, error) {
+	// exist remotely nodes.
+	if g.peers != nil {
+		if peer, ok := g.peers.PickPeer(key); ok {
+			if value, err := g.getFromPeer(peer, key); err == nil {
+				return value, nil
+			}
+		}
+	}
+	// get value from local
 	return g.getLocally(key)
+}
+
+func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
+	bytes, err := peer.Get(g.name, key)
+	return ByteView{b: bytes}, err
 }
 
 func (g *Group) getLocally(key string) (ByteView, error) {
