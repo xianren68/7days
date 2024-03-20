@@ -59,6 +59,7 @@ func GetGroup(name string) *Group {
 	return g
 }
 
+// Get get value.
 func (g *Group) Get(key string) (ByteView, error) {
 	if key == "" {
 		return ByteView{}, fmt.Errorf("key is required")
@@ -71,7 +72,7 @@ func (g *Group) Get(key string) (ByteView, error) {
 }
 
 func (g *Group) load(key string) (ByteView, error) {
-	// exist remotely nodes.
+	// if exist remotely nodes.
 	if g.peers != nil {
 		if peer, ok := g.peers.PickPeer(key); ok {
 			if value, err := g.getFromPeer(peer, key); err == nil {
@@ -79,15 +80,17 @@ func (g *Group) load(key string) (ByteView, error) {
 			}
 		}
 	}
-	// get value from local
+	// get value from local.
 	return g.getLocally(key)
 }
 
+// getFromPeer get value from remotely nodes.
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
 	bytes, err := peer.Get(g.name, key)
 	return ByteView{b: bytes}, err
 }
 
+// getLocally get value from local,example database or file
 func (g *Group) getLocally(key string) (ByteView, error) {
 	bytes, err := g.getter.Get(key)
 	if err != nil {
