@@ -1,6 +1,7 @@
 package Cache
 
 import (
+	"Cache/singleflight"
 	"fmt"
 	"log"
 	"sync"
@@ -26,6 +27,7 @@ type Group struct {
 	getter    Getter
 	mainCache *cache
 	peers     PeerPicker
+	loader    *singleflight.Group
 }
 
 // RegisterPeers register peerPicker.
@@ -47,6 +49,7 @@ func NewGroup(name string, cacheBytes int, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: &cache{maxSize: cacheBytes},
+		loader:    &singleflight.Group{},
 	}
 	groups[name] = group
 	return group
@@ -72,16 +75,19 @@ func (g *Group) Get(key string) (ByteView, error) {
 }
 
 func (g *Group) load(key string) (ByteView, error) {
-	// if exist remotely nodes.
-	if g.peers != nil {
-		if peer, ok := g.peers.PickPeer(key); ok {
-			if value, err := g.getFromPeer(peer, key); err == nil {
-				return value, nil
+	value, err := g.loader.Do(key, func() (any, error) {
+		// if exist remotely nodes.
+		if g.peers != nil {
+			if peer, ok := g.peers.PickPeer(key); ok {
+				if value, err := g.getFromPeer(peer, key); err == nil {
+					return value, nil
+				}
 			}
 		}
-	}
-	// get value from local.
-	return g.getLocally(key)
+		// get value from local.
+		return g.getLocally(key)
+	})
+	return value.(ByteView), err
 }
 
 // getFromPeer get value from remotely nodes.
