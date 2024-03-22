@@ -1,5 +1,7 @@
 package Cache
 
+import "Cache/pb"
+
 // PeerPicker select nodes from hash ring.
 type PeerPicker interface {
 	PickPeer(key string) (peer PeerGetter, ok bool)
@@ -7,5 +9,5 @@ type PeerPicker interface {
 
 // PeerGetter get cache value by group and key.
 type PeerGetter interface {
-	Get(group string, key string) ([]byte, error)
+	Get(in *pb.Request, out *pb.Response) error
 }

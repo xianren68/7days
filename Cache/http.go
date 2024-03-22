@@ -2,6 +2,7 @@ package Cache
 
 import (
 	"Cache/consistenthash"
+	"Cache/pb"
 	"fmt"
 	"io"
 	"log"
@@ -9,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -22,17 +25,25 @@ type HttpGetter struct {
 }
 
 // Get get value from remotely nodes.
-func (h *HttpGetter) Get(group, key string) ([]byte, error) {
-	u := fmt.Sprintf("%s%s%s", h.baseUrl, url.QueryEscape(group), url.QueryEscape(key))
+func (h *HttpGetter) Get(in *pb.Request, out *pb.Response) error {
+	u := fmt.Sprintf("%s%s%s", h.baseUrl, url.QueryEscape(in.GetGroup()), url.QueryEscape(in.GetKey()))
 	res, err := http.Get(u)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned: %v", res.Status)
+		return fmt.Errorf("server returned: %v", res.Status)
 	}
-	return io.ReadAll(res.Body)
+	bytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	err = proto.Unmarshal(bytes, out)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal response: %v", err)
+	}
+	return nil
 }
 
 // HttpPool Http client pool.
@@ -78,12 +89,19 @@ func (p *HttpPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view, err := group.Get(key)
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	body, err := proto.Marshal(&pb.Response{Value: view.Byteslice()})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(view.Byteslice())
+	w.Write(body)
 }
 
 // Set set consistent hash map.

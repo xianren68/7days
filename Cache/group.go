@@ -1,6 +1,7 @@
 package Cache
 
 import (
+	"Cache/pb"
 	"Cache/singleflight"
 	"fmt"
 	"log"
@@ -92,8 +93,14 @@ func (g *Group) load(key string) (ByteView, error) {
 
 // getFromPeer get value from remotely nodes.
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
-	bytes, err := peer.Get(g.name, key)
-	return ByteView{b: bytes}, err
+	//
+	req := &pb.Request{Group: g.name, Key: key}
+	res := &pb.Response{}
+	err := peer.Get(req, res)
+	if err != nil {
+		return ByteView{}, err
+	}
+	return ByteView{b: res.Value}, nil
 }
 
 // getLocally get value from local,example database or file
